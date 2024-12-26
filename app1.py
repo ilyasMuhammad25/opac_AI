@@ -6,8 +6,16 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from sklearn.metrics.pairwise import cosine_similarity
 from collections import defaultdict
+import google.generativeai as genai
+import os
+from flask import request
+
 
 app = Flask(__name__)
+# Configure Gemini AI
+GOOGLE_API_KEY = 'AIzaSyA1ZHwqVwzj1z9A8lWNhlXZfX5-sby__8A'  # Replace with your API key
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel('gemini-pro')
 
 # Database configuration
 DB_CONFIG = {
@@ -107,10 +115,11 @@ def get_user_loan_history(member_no):
     with get_db_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
-                SELECT cli."COLLECTION_ID", c."TITLE", c."AUTHOR", cli."LOANDATE"
+                SELECT cli."COLLECTION_ID", c."TITLE", c."AUTHOR", cli."LOANDATE", cat."COVERURL"
                 FROM "COLLECTIONLOANITEMS" cli
                 JOIN "MEMBERS" m ON cli."MEMBER_ID" = m."ID"
                 JOIN "COLLECTIONS" c ON cli."COLLECTION_ID" = c."ID"
+                LEFT JOIN "CATALOGS" cat ON c."CATALOG_ID" = cat."ID"
                 WHERE m."MEMBERNO" = %s
                 ORDER BY cli."LOANDATE" DESC
             """, (member_no,))
@@ -143,9 +152,9 @@ def get_recommendations(member_no):
                 SELECT DISTINCT 
                     c."ID",
                     c."TITLE",
-                    cat."COVERURL",
                     c."AUTHOR",
                     c."PUBLISHER",
+                    cat."COVERURL",
                     COUNT(DISTINCT cli."MEMBER_ID") as borrow_count
                 FROM "COLLECTIONS" c
                 LEFT JOIN "CATALOGS" cat ON c."CATALOG_ID" = cat."ID"
@@ -158,7 +167,12 @@ def get_recommendations(member_no):
                     JOIN "MEMBERS" m2 ON cli2."MEMBER_ID" = m2."ID"
                     WHERE m2."MEMBERNO" = %s
                 )
-                GROUP BY c."ID", c."TITLE", c."AUTHOR", c."PUBLISHER", cat."COVERURL"
+                GROUP BY 
+                    c."ID", 
+                    c."TITLE", 
+                    c."AUTHOR", 
+                    c."PUBLISHER",
+                    cat."COVERURL"
                 ORDER BY borrow_count DESC
                 LIMIT 10
             """, (*similar_member_nos, member_no))
@@ -172,12 +186,13 @@ def get_recommendations(member_no):
                     'id': rec['ID'],
                     'title': rec['TITLE'],
                     'author': rec['AUTHOR'],
-                    'cover_url': rec['COVERURL'],
                     'publisher': rec['PUBLISHER'],
-                    'borrow_count': rec['borrow_count']
+                    'borrow_count': rec['borrow_count'],
+                    'cover_url': rec['COVERURL']
                 })
             
             return formatted_recommendations
+
 import requests
 
 @app.route('/cover-proxy/<path:cover_url>')
@@ -192,6 +207,156 @@ def cover_proxy(cover_url):
     except Exception as e:
         return '', 404
 
+
+
+
+def generate_sql_query(prompt):
+    """Convert natural language to SQL PostgreSQL using Gemini AI"""
+    system_prompt = """
+    You are a SQL expert. Convert the following natural language query into a PostgreSQL query.
+    Use these table structures and relationships:
+    
+    Tables:
+    - COLLECTIONS: Contains book information
+      * ID (numeric)
+      * NOMORBARCODE (varchar)
+      * STATUS (varchar)
+      * CATALOG_ID (numeric) - references CATALOGS.ID
+    
+    - COLLECTIONLOANITEMS: Contains loan records
+      * COLLECTION_ID (numeric) - references COLLECTIONS.ID
+      * MEMBER_ID (numeric) - references MEMBERS.ID
+      * LOANDATE (timestamp)
+    
+    - CATALOGS: Contains book metadata
+      * ID (numeric)
+      * TITLE (varchar)
+      * AUTHOR (varchar)
+      * PUBLISHER (varchar)
+      * SUBJECT (varchar)
+      * COVERURL (varchar)
+    
+    - MEMBERS: Contains member information
+      * ID (numeric)
+      * MEMBERNO (varchar)
+      * FULLNAME (varchar)
+    
+    Rules:
+    1. Always use double quotes for table and column names
+    2. Include error handling
+    3. Optimize for performance
+    4. Return only the SQL query
+    5. For book covers and titles, always join COLLECTIONS with CATALOGS using CATALOG_ID
+    6. When counting borrows, join COLLECTIONS with COLLECTIONLOANITEMS using COLLECTIONS.ID
+    7. in every result alwasy show AUTHOR, TITLE, PUBLISHER, COVERURL
+    
+    Example for most borrowed books:
+    SELECT 
+        cat."TITLE",
+        cat."AUTHOR",
+        cat."PUBLISHER",
+        cat."COVERURL",
+        COUNT(cli."ID") as borrow_count
+    FROM "COLLECTIONS" c
+    LEFT JOIN "CATALOGS" cat ON c."CATALOG_ID" = cat."ID"
+    LEFT JOIN "COLLECTIONLOANITEMS" cli ON c."ID" = cli."COLLECTION_ID"
+    GROUP BY cat."ID", cat."TITLE", cat."AUTHOR", cat."PUBLISHER", cat."COVERURL"
+    ORDER BY borrow_count DESC
+    LIMIT 10;
+    """
+    
+    try:
+        response = model.generate_content(f"{system_prompt}\n\nQuery: {prompt}")
+        sql_query = response.text.strip()
+        # Remove markdown code blocks if present
+        sql_query = sql_query.replace('```sql', '').replace('```', '').strip()
+        return sql_query
+    except Exception as e:
+        print(f"Error generating SQL: {str(e)}")
+        return None
+
+@app.route('/api/search', methods=['POST'])
+def natural_language_search():
+    """API endpoint for natural language search"""
+    try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Request must be JSON'
+            }), 400
+            
+        data = request.get_json()
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return jsonify({
+                'success': False,
+                'error': 'Query is required'
+            }), 400
+            
+        # For common queries, use predefined SQL
+        if query.lower() in ['show top 10 most borrowed books', 'show me top 10 most borrowed books']:
+            sql_query = """
+                SELECT 
+                    cat."TITLE",
+                    cat."AUTHOR",
+                    cat."PUBLISHER",
+                    cat."COVERURL",
+                    COUNT(cli."ID") as borrow_count
+                FROM "COLLECTIONS" c
+                LEFT JOIN "CATALOGS" cat ON c."CATALOG_ID" = cat."ID"
+                LEFT JOIN "COLLECTIONLOANITEMS" cli ON c."ID" = cli."COLLECTION_ID"
+                GROUP BY cat."ID", cat."TITLE", cat."AUTHOR", cat."PUBLISHER", cat."COVERURL"
+                ORDER BY borrow_count DESC
+                LIMIT 10
+            """
+        else:
+            # Generate SQL from natural language
+            sql_query = generate_sql_query(query)
+            
+        if not sql_query:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to generate SQL query'
+            }), 500
+        
+        # Execute the generated query
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                try:
+                    cur.execute(sql_query)
+                    results = cur.fetchall()
+                    
+                    # Format results
+                    formatted_results = []
+                    for result in results:
+                        formatted_results.append({
+                            'id': result.get('ID'),
+                            'title': result.get('TITLE'),
+                            'author': result.get('AUTHOR', 'Unknown'),
+                            'cover_url': result.get('COVERURL'),
+                            'publisher': result.get('PUBLISHER', 'Unknown'),
+                            'borrow_count': result.get('borrow_count', 0)
+                        })
+                    
+                    return jsonify({
+                        'success': True,
+                        'data': formatted_results,
+                        'sql_query': sql_query  # For debugging
+                    })
+                except Exception as e:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Error executing query: {str(e)}',
+                        'sql_query': sql_query  # For debugging
+                    }), 500
+                    
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+    
 @app.route('/')
 def index():
     return render_template('index_pg.html')
@@ -269,7 +434,8 @@ def get_user_history(member_no):
                 'collection_id': item['COLLECTION_ID'],
                 'title': item['TITLE'],
                 'author': item['AUTHOR'],
-                'loandate': item['LOANDATE']
+                'loandate': item['LOANDATE'],
+                'cover_url': item['COVERURL']
             })
         return jsonify({
             'success': True,
@@ -280,6 +446,7 @@ def get_user_history(member_no):
             'success': False,
             'error': str(e)
         }), 500
+
     
 if __name__ == '__main__':
     app.run(debug=True)
