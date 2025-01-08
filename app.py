@@ -9,10 +9,10 @@ app = Flask(__name__)
 
 # Database configuration
 db_config = {
-    'host': 'localhost',
-    'user': 'root',
-    'password': '',
-    'database': 'inlis_pangkalpinang'
+    'host': '192.168.0.201',
+    'user': 'pusdatin',
+    'password': 'pusdatin@2023',
+    'database': 'inlislite_pangkalpinang'
 }
 
 def get_user_loan_history(member_no):
