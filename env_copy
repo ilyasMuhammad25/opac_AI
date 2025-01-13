@@ -1,0 +1,5 @@
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=inlislite_pangkalpinang21122024
+GEMINI_API_KEY = AIzaSyAeoDp72Qfe7-xnhfzkslaHOoHhK_P_z04

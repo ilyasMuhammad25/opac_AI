@@ -1,12 +1,18 @@
 from flask import Flask, request, render_template, jsonify
 import mysql.connector
+from mysql.connector import pooling
 from collections import defaultdict
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from collections import defaultdict
 from datetime import datetime, timedelta
 import google.generativeai as genai
 import asyncio
 from typing import Dict, Any
+import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 
@@ -15,8 +21,337 @@ db_config = {
     'host': 'localhost',
     'user': 'root',
     'password': '',
-    'database': 'inlislite_pangkalpinang'
+    'database': 'inlislite_pangkalpinang21122024'
 }
+
+# Initialize the connection pool
+db_pool = pooling.MySQLConnectionPool(
+    pool_name="mypool",
+    pool_size=5,  # Number of connections in the pool
+    **db_config
+)
+
+class LibraryClassifier:
+    def __init__(self, db_config):
+        """
+        Initialize the classifier with database configuration
+        
+        Parameters:
+        db_config (dict): Database connection configuration
+        """
+        self.db_config = db_config
+        self.vectorizer = TfidfVectorizer(
+            stop_words='english',
+            ngram_range=(1, 2),
+            max_features=5000
+        )
+        self.subject_vectors = None
+        self.book_metadata = None
+        
+    def _fetch_book_data(self):
+        """Fetch book data from database"""
+        try:
+            conn = mysql.connector.connect(**self.db_config)
+            cursor = conn.cursor(dictionary=True)
+            
+            query = """
+            SELECT 
+                c.ID,
+                c.Title,
+                c.Author,
+                c.Publisher,
+                c.Subject,
+                c.PublishYear,
+                COUNT(cli.ID) as borrow_count
+            FROM catalogs c
+            LEFT JOIN collectionloanitems cli ON c.ID = cli.Collection_id
+            WHERE c.Subject IS NOT NULL
+            GROUP BY c.ID
+            """
+            
+            cursor.execute(query)
+            return pd.DataFrame(cursor.fetchall())
+            
+        finally:
+            if 'conn' in locals() and conn.is_connected():
+                cursor.close()
+                conn.close()
+                
+    def train_classifier(self):
+        """Train the classifier on the current library catalog"""
+        # Fetch book data
+        df = self._fetch_book_data()
+        self.book_metadata = df
+        
+        # Create subject vectors
+        subjects = df['Subject'].fillna('')
+        self.subject_vectors = self.vectorizer.fit_transform(subjects)
+        
+        # Create subject categories
+        self.subject_categories = self._create_subject_categories(df)
+        
+    def _create_subject_categories(self, df):
+        """Create hierarchical subject categories"""
+        categories = defaultdict(list)
+        
+        for _, row in df.iterrows():
+            subject = row['Subject']
+            if pd.isna(subject) or not subject:
+                continue
+                
+            # Split subject into hierarchical levels
+            levels = [s.strip() for s in subject.split('-')]
+            
+            # Add book to each level of hierarchy
+            current = ''
+            for level in levels:
+                current = (current + ' - ' + level).strip()
+                categories[current].append(row['ID'])
+                
+        return categories
+        
+    def get_similar_books(self, book_id, n=5):
+        """
+        Get similar books based on subject similarity
+        
+        Parameters:
+        book_id (int): ID of the target book
+        n (int): Number of similar books to return
+        
+        Returns:
+        list: Similar books with similarity scores
+        """
+        if self.subject_vectors is None:
+            self.train_classifier()
+            
+        # Get book index
+        book_idx = self.book_metadata[self.book_metadata['ID'] == book_id].index
+        if len(book_idx) == 0:
+            return []
+            
+        book_idx = book_idx[0]
+        
+        # Calculate similarity scores
+        similarities = cosine_similarity(
+            self.subject_vectors[book_idx:book_idx+1], 
+            self.subject_vectors
+        ).flatten()
+        
+        # Get top similar books
+        similar_idxs = similarities.argsort()[::-1][1:n+1]
+        
+        similar_books = []
+        for idx in similar_idxs:
+            book = self.book_metadata.iloc[idx]
+            similar_books.append({
+                'id': book['ID'],
+                'title': book['Title'],
+                'author': book['Author'],
+                'subject': book['Subject'],
+                'similarity': similarities[idx]
+            })
+            
+        return similar_books
+        
+@app.route('/api/classify', methods=['POST'])
+def classify():
+    try:
+        # Parse JSON data from the request
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        author = data.get('author', '').strip()
+        subject = data.get('subject', '').strip()
+
+        # Validate inputs
+        if not title or not author or not subject:
+            raise ValueError("All fields (title, author, subject) are required.")
+
+        # Fetch data from the database
+        suggested_categories = get_suggested_categories(title, author, subject)
+        similar_books = get_similar_books(title, author, subject)
+
+        # Return the classification results
+        return jsonify({
+            "success": True,
+            "data": {
+                "suggested_categories": suggested_categories,
+                "similar_books": similar_books,
+            }
+        })
+
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
+    except Exception as e:
+        app.logger.error(f"Error in classify route: {str(e)}")
+        return jsonify({"success": False, "error": "Internal Server Error"}), 500
+
+def get_similar_books(title, author, subject):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            Title, 
+            Author, 
+            Subject,
+            COUNT(cli.ID) AS borrow_count
+        FROM 
+            catalogs c
+        LEFT JOIN 
+            collectionloanitems cli ON c.ID = cli.Collection_id
+        WHERE 
+            (c.Title LIKE %s OR c.Author LIKE %s OR c.Subject LIKE %s)
+            AND NOT (c.Title = %s AND c.Author = %s AND c.Subject = %s)
+        GROUP BY 
+            c.ID
+        ORDER BY 
+            borrow_count DESC
+        LIMIT 5;
+        """
+        cursor.execute(query, (f"%{title}%", f"%{author}%", f"%{subject}%", title, author, subject))
+        return cursor.fetchall()
+    except Exception as e:
+        app.logger.error(f"Error in get_similar_books: {e}")
+        return []
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+def get_similar_books(title, author, subject):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            Title, 
+            Author, 
+            Subject,
+            COUNT(cli.ID) AS borrow_count
+        FROM 
+            catalogs c
+        LEFT JOIN 
+            collectionloanitems cli ON c.ID = cli.Collection_id
+        WHERE 
+            (c.Title LIKE %s OR c.Author LIKE %s OR c.Subject LIKE %s)
+            AND NOT (c.Title = %s AND c.Author = %s AND c.Subject = %s)
+        GROUP BY 
+            c.ID
+        ORDER BY 
+            borrow_count DESC
+        LIMIT 5;
+        """
+        cursor.execute(query, (f"%{title}%", f"%{author}%", f"%{subject}%", title, author, subject))
+        return cursor.fetchall()
+    except Exception as e:
+        app.logger.error(f"Error in get_similar_books: {e}")
+        return []
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def get_suggested_categories(title, author, subject):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            Subject AS category, 
+            COUNT(*) AS similarity
+        FROM 
+            catalogs
+        WHERE 
+            Title LIKE %s OR
+            Author LIKE %s OR
+            Subject LIKE %s
+        GROUP BY 
+            Subject
+        ORDER BY 
+            similarity DESC
+        LIMIT 5;
+        """
+        cursor.execute(query, (f"%{title}%", f"%{author}%", f"%{subject}%"))
+        return cursor.fetchall()
+    except Exception as e:
+        app.logger.error(f"Error in get_suggested_categories: {e}")
+        return []
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def get_db_connection():
+    """
+    Fetch a database connection from the connection pool.
+    """
+    try:
+        # Get a connection from the pool
+        conn = db_pool.get_connection()
+        if conn.is_connected():
+            return conn
+        else:
+            raise Exception("Failed to establish a database connection.")
+    except Exception as e:
+        app.logger.error(f"Database connection error: {e}")
+        raise
+
+def get_similar_books(title, author, subject):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        query = """
+        SELECT 
+            Title, 
+            Author, 
+            Subject,
+            COUNT(cli.ID) AS borrow_count
+        FROM 
+            catalogs c
+        LEFT JOIN 
+            collectionloanitems cli ON c.ID = cli.Collection_id
+        WHERE 
+            (c.Title LIKE %s OR c.Author LIKE %s OR c.Subject LIKE %s)
+            AND NOT (c.Title = %s AND c.Author = %s AND c.Subject = %s)
+        GROUP BY 
+            c.ID
+        ORDER BY 
+            borrow_count DESC
+        LIMIT 5;
+        """
+        cursor.execute(query, (f"%{title}%", f"%{author}%", f"%{subject}%", title, author, subject))
+        return cursor.fetchall()
+    except Exception as e:
+        app.logger.error(f"Error in get_similar_books: {e}")
+        return []
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+
+def get_popular_in_category(self, category, n=5):
+        """
+        Get popular books in a specific category
+        
+        Parameters:
+        category (str): Target category
+        n (int): Number of books to return
+        
+        Returns:
+        list: Popular books in category
+        """
+        if category not in self.subject_categories:
+            return []
+            
+        book_ids = self.subject_categories[category]
+        category_books = self.book_metadata[
+            self.book_metadata['ID'].isin(book_ids)
+        ]
+        
+        return category_books.nlargest(n, 'borrow_count').to_dict('records')
 
 class GeminiSQLConverter:
     def __init__(self, api_key):
