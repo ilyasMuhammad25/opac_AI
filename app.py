@@ -510,11 +510,28 @@ def get_recommendations(member_no):
         member_id_result = cursor.fetchone()
 
         if not member_id_result:
-            return [], 0.0, 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
+            return [], 0.0, 0.0, 0.0, 0.0  # Jika MemberNo tidak ditemukan, kembalikan kosong
 
         member_id = member_id_result['ID']
 
-        # Pivot table untuk collaborative filtering
+        # metode colds start Cek apakah MemberNo memiliki riwayat peminjaman
+        user_loans = df_loans[df_loans['member_id'] == member_id]
+        if user_loans.empty:
+            # Cold Start: Rekomendasi berbasis buku populer
+            popular_books_query = """
+            SELECT Catalog_id, Title, Author, Subject, CoverURL, COUNT(*) AS LoanCount
+            FROM collectionloanitems cl
+            JOIN collections c ON cl.Collection_id = c.ID
+            JOIN catalogs cat ON c.Catalog_id = cat.ID
+            GROUP BY Catalog_id, Title, Author, Subject, CoverURL
+            ORDER BY LoanCount DESC
+            LIMIT 10
+            """
+            cursor.execute(popular_books_query)
+            popular_books = cursor.fetchall()
+            return [dict(book) for book in popular_books], 0.0, 0.0, 0.0, 0.0  # Cold start
+
+        # Collaborative Filtering
         pivot_table = df_loans.pivot_table(index='member_id', columns='Catalog_id', aggfunc='size', fill_value=0)
 
         # Menghitung cosine similarity
@@ -543,9 +560,8 @@ def get_recommendations(member_no):
         recommendations = [dict(book) for book in books]
 
         # Perhitungan Metrik Evaluasi
-
         # Ground truth: Buku yang telah dipinjam oleh pengguna (buku relevan)
-        user_books = set(df_loans[df_loans['member_id'] == member_id]['Catalog_id'].tolist())
+        user_books = set(user_loans['Catalog_id'].tolist())
 
         # Buku yang direkomendasikan: ID Katalog dari rekomendasi teratas
         recommended_books_set = set(recommended_books['Catalog_id'].tolist())
@@ -560,18 +576,11 @@ def get_recommendations(member_no):
         # Akurasi = jumlah buku relevan yang direkomendasikan / jumlah buku relevan dalam sistem
         accuracy = len(relevant_recommended_books) / len(user_books) if len(user_books) > 0 else 0.0
 
-        # Perhitungan NDCG (menggunakan peringkat dari buku yang direkomendasikan)
-        # Membuat skor relevansi (1 jika relevan, 0 jika tidak) untuk buku yang direkomendasikan
+        # Perhitungan NDCG
         relevance_scores = [1 if book_id in user_books else 0 for book_id in recommended_books['Catalog_id']]
-        
-        # Menghitung DCG (Discounted Cumulative Gain)
         dcg = np.sum([relevance_scores[i] / np.log2(i + 2) for i in range(len(relevance_scores))])
-        
-        # Menghitung Ideal DCG (IDCG) berdasarkan skor relevansi yang diurutkan
         ideal_relevance_scores = sorted(relevance_scores, reverse=True)
         idcg = np.sum([ideal_relevance_scores[i] / np.log2(i + 2) for i in range(len(ideal_relevance_scores))])
-        
-        # NDCG = DCG / IDCG
         ndcg = dcg / idcg if idcg > 0 else 0.0
 
         return recommendations, precision, recall, ndcg, accuracy
@@ -581,6 +590,7 @@ def get_recommendations(member_no):
     finally:
         cursor.close()
         connection.close()
+
 
 
 
