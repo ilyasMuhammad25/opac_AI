@@ -529,7 +529,9 @@ def get_recommendations(member_no):
         # Mengambil judul buku beserta Author dan Subject
         book_ids = recommended_books['Catalog_id'].tolist()
         book_query = """
-        SELECT ID, Title, Author, Subject, CoverURL FROM catalogs WHERE ID IN (%s)
+        SELECT CAST(ID AS SIGNED) as ID, Title, Author, Subject, CoverURL 
+        FROM catalogs 
+        WHERE ID IN (%s)
         """ % ','.join(['%s'] * len(book_ids))
         
         cursor.execute(book_query, book_ids)
@@ -611,6 +613,79 @@ def index():
 
 
 
+# -----start halaman detail buku-------
+
+@app.route('/books/<int:book_id>')
+def book_detail(book_id):
+    """
+    Route untuk melihat detail buku
+    """
+    try:
+        # Buat koneksi ke database
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Query untuk mengambil detail buku dan status ketersediaan
+        query = """
+        SELECT 
+            c.ID,
+            c.Title,
+            c.Author,
+            c.Publisher,
+            c.PublishYear,
+            c.Subject,
+            c.CoverURL,
+            c.Edition,
+            c.ISBN,
+            c.CallNumber,
+            COUNT(DISTINCT cli.ID) as borrow_count,
+            COUNT(DISTINCT col.ID) as total_copies,
+            COUNT(DISTINCT CASE WHEN cli.ActualReturn IS NULL THEN cli.ID END) as borrowed
+        FROM 
+            catalogs c
+        LEFT JOIN 
+            collections col ON c.ID = col.Catalog_id
+        LEFT JOIN 
+            collectionloanitems cli ON col.ID = cli.Collection_id
+        WHERE 
+            c.ID = %s
+        GROUP BY 
+            c.ID, c.Title, c.Author, c.Publisher, c.PublishYear, 
+            c.Subject, c.CoverURL, c.Edition,
+            c.ISBN, c.CallNumber
+        """
+        
+        # Eksekusi query
+        cursor.execute(query, (book_id,))
+        book = cursor.fetchone()
+        
+        if not book:
+            return "Buku tidak ditemukan", 404
+            
+        # Hitung jumlah yang tersedia
+        book['available'] = book['total_copies'] - (book['borrowed'] or 0)
+        
+        # Render template dengan data buku
+        return render_template('book_detail.html', book=book)
+        
+    except Exception as e:
+        app.logger.error(f"Error in book detail: {e}")
+        return "Terjadi kesalahan", 500
+        
+    finally:
+        if 'conn' in locals() and conn.is_connected():
+            cursor.close()
+            conn.close()
+    """
+    Route untuk halaman detail buku
+    """
+    book = get_book_details(book_id)
+    if not book:
+        return render_template('404.html'), 404
+        
+    return render_template('book_detail.html', book=book)
+
+#------ end detail buku-------
 
 if __name__ == '__main__':
     app.run(debug=True)
