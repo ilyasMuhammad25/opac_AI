@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.metrics import precision_score, recall_score, ndcg_score
 from collections import defaultdict
 from datetime import datetime, timedelta
 import google.generativeai as genai
@@ -21,7 +22,7 @@ db_config = {
     'host': 'localhost',
     'user': 'root',
     'password': '',
-    'database': 'inlislite_pangkalpinang21122024'
+    'database': 'inlislite_pangkalpinang'
 }
 
 # Initialize the connection pool
@@ -31,6 +32,22 @@ db_pool = pooling.MySQLConnectionPool(
     **db_config
 )
 
+def get_db_connection():
+    """
+    Fetch a database connection from the connection pool.
+    """
+    try:
+        # Get a connection from the pool
+        conn = db_pool.get_connection()
+        if conn.is_connected():
+            return conn
+        else:
+            raise Exception("Failed to establish a database connection.")
+    except Exception as e:
+        app.logger.error(f"Database connection error: {e}")
+        raise
+
+# start kodingan klasifikasi
 class LibraryClassifier:
     def __init__(self, db_config):
         """
@@ -152,38 +169,6 @@ class LibraryClassifier:
             })
             
         return similar_books
-        
-@app.route('/api/classify', methods=['POST'])
-def classify():
-    try:
-        # Parse JSON data from the request
-        data = request.get_json()
-        title = data.get('title', '').strip()
-        author = data.get('author', '').strip()
-        subject = data.get('subject', '').strip()
-
-        # Validate inputs
-        if not title or not author or not subject:
-            raise ValueError("All fields (title, author, subject) are required.")
-
-        # Fetch data from the database
-        suggested_categories = get_suggested_categories(title, author, subject)
-        similar_books = get_similar_books(title, author, subject)
-
-        # Return the classification results
-        return jsonify({
-            "success": True,
-            "data": {
-                "suggested_categories": suggested_categories,
-                "similar_books": similar_books,
-            }
-        })
-
-    except ValueError as e:
-        return jsonify({"success": False, "error": str(e)}), 400
-    except Exception as e:
-        app.logger.error(f"Error in classify route: {str(e)}")
-        return jsonify({"success": False, "error": "Internal Server Error"}), 500
 
 def get_similar_books(title, author, subject):
     try:
@@ -218,39 +203,7 @@ def get_similar_books(title, author, subject):
         if 'conn' in locals() and conn.is_connected():
             cursor.close()
             conn.close()
-def get_similar_books(title, author, subject):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
 
-        query = """
-        SELECT 
-            Title, 
-            Author, 
-            Subject,
-            COUNT(cli.ID) AS borrow_count
-        FROM 
-            catalogs c
-        LEFT JOIN 
-            collectionloanitems cli ON c.ID = cli.Collection_id
-        WHERE 
-            (c.Title LIKE %s OR c.Author LIKE %s OR c.Subject LIKE %s)
-            AND NOT (c.Title = %s AND c.Author = %s AND c.Subject = %s)
-        GROUP BY 
-            c.ID
-        ORDER BY 
-            borrow_count DESC
-        LIMIT 5;
-        """
-        cursor.execute(query, (f"%{title}%", f"%{author}%", f"%{subject}%", title, author, subject))
-        return cursor.fetchall()
-    except Exception as e:
-        app.logger.error(f"Error in get_similar_books: {e}")
-        return []
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
 
 def get_suggested_categories(title, author, subject):
     try:
@@ -283,76 +236,42 @@ def get_suggested_categories(title, author, subject):
             cursor.close()
             conn.close()
 
-def get_db_connection():
-    """
-    Fetch a database connection from the connection pool.
-    """
+@app.route('/api/classify', methods=['POST'])
+def classify():
     try:
-        # Get a connection from the pool
-        conn = db_pool.get_connection()
-        if conn.is_connected():
-            return conn
-        else:
-            raise Exception("Failed to establish a database connection.")
+        # Parse JSON data from the request
+        data = request.get_json()
+        title = data.get('title', '').strip()
+        author = data.get('author', '').strip()
+        subject = data.get('subject', '').strip()
+
+        # Validate inputs
+        if not title or not author or not subject:
+            raise ValueError("All fields (title, author, subject) are required.")
+
+        # Fetch data from the database
+        suggested_categories = get_suggested_categories(title, author, subject)
+        similar_books = get_similar_books(title, author, subject)
+
+        # Return the classification results
+        return jsonify({
+            "success": True,
+            "data": {
+                "suggested_categories": suggested_categories,
+                "similar_books": similar_books,
+            }
+        })
+
+    except ValueError as e:
+        return jsonify({"success": False, "error": str(e)}), 400
     except Exception as e:
-        app.logger.error(f"Database connection error: {e}")
-        raise
+        app.logger.error(f"Error in classify route: {str(e)}")
+        return jsonify({"success": False, "error": "Internal Server Error"}), 500
 
-def get_similar_books(title, author, subject):
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+#------ end kodingan klasifikasi---------
 
-        query = """
-        SELECT 
-            Title, 
-            Author, 
-            Subject,
-            COUNT(cli.ID) AS borrow_count
-        FROM 
-            catalogs c
-        LEFT JOIN 
-            collectionloanitems cli ON c.ID = cli.Collection_id
-        WHERE 
-            (c.Title LIKE %s OR c.Author LIKE %s OR c.Subject LIKE %s)
-            AND NOT (c.Title = %s AND c.Author = %s AND c.Subject = %s)
-        GROUP BY 
-            c.ID
-        ORDER BY 
-            borrow_count DESC
-        LIMIT 5;
-        """
-        cursor.execute(query, (f"%{title}%", f"%{author}%", f"%{subject}%", title, author, subject))
-        return cursor.fetchall()
-    except Exception as e:
-        app.logger.error(f"Error in get_similar_books: {e}")
-        return []
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
 
-def get_popular_in_category(self, category, n=5):
-        """
-        Get popular books in a specific category
-        
-        Parameters:
-        category (str): Target category
-        n (int): Number of books to return
-        
-        Returns:
-        list: Popular books in category
-        """
-        if category not in self.subject_categories:
-            return []
-            
-        book_ids = self.subject_categories[category]
-        category_books = self.book_metadata[
-            self.book_metadata['ID'].isin(book_ids)
-        ]
-        
-        return category_books.nlargest(n, 'borrow_count').to_dict('records')
-
+# ------startn kodingan input search to sql query------
 class GeminiSQLConverter:
     def __init__(self, api_key):
         # Configure Gemini AI
@@ -538,304 +457,153 @@ def setup_gemini():
     except:
         return None
     
+# ----end kodingan input search to sql-----
+
+
+# -----start kodingan rekomendasi-----
 def get_user_loan_history(member_no):
-    """Get loan history for a specific member"""
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        query = """
-        SELECT DISTINCT c.Title, c.Author, c.Subject
-        FROM members m
-        JOIN collectionloans cl ON m.ID = cl.Member_id
-        JOIN collectionloanitems cli ON cl.ID = cli.CollectionLoan_id
-        JOIN catalogs c ON cli.Collection_id = c.ID
-        WHERE m.MemberNo = %s
-        """
-        
-        cursor.execute(query, (member_no,))
-        return cursor.fetchall()
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
     
+    loan_query = """
+    SELECT cl.member_id, cl.Collection_id, c.Catalog_id, cat.Title, cat.CoverURL
+    FROM collectionloanitems cl
+    JOIN collections c ON cl.Collection_id = c.ID
+    JOIN catalogs cat ON c.Catalog_id = cat.ID
+    WHERE cl.member_id = %s
+    """
+    try:
+        cursor.execute(loan_query, (member_no,))
+        result = cursor.fetchall()
+        return pd.DataFrame(result)
     except Exception as e:
-        print(f"Error: {e}")
-        return []
+        return {'error': str(e)}
     finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
+        cursor.close()
+        connection.close()
 
-def get_popular_books(limit=5):
-    """Get most popular books from the last 3 months"""
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        three_months_ago = datetime.now() - timedelta(days=90)
-        
-        query = """
-        SELECT 
-            c.Title,
-            c.Author,
-            c.Subject,
-            COUNT(cli.ID) as borrow_count
-        FROM catalogs c
-        JOIN collectionloanitems cli ON c.ID = cli.Collection_id
-        WHERE cli.LoanDate >= %s
-        GROUP BY c.ID
-        ORDER BY borrow_count DESC
-        LIMIT %s
-        """
-        
-        cursor.execute(query, (three_months_ago, limit))
-        return cursor.fetchall()
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
-
-def get_subject_recommendations(subject, limit=5):
-    """Get books based on a specific subject"""
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        query = """
-        SELECT 
-            c.Title,
-            c.Author,
-            c.Subject,
-            COUNT(cli.ID) as borrow_count
-        FROM catalogs c
-        LEFT JOIN collectionloanitems cli ON c.ID = cli.Collection_id
-        WHERE c.Subject LIKE %s
-        GROUP BY c.ID
-        ORDER BY borrow_count DESC
-        LIMIT %s
-        """
-        
-        cursor.execute(query, (f"%{subject}%", limit))
-        return cursor.fetchall()
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
-
-def get_new_books(limit=5):
-    """Get recently added books"""
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        query = """
-        SELECT 
-            Title,
-            Author,
-            Subject,
-            CreateDate
-        FROM catalogs
-        WHERE CreateDate IS NOT NULL
-        ORDER BY CreateDate DESC
-        LIMIT %s
-        """
-        
-        cursor.execute(query, (limit,))
-        return cursor.fetchall()
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
-
-def get_similar_users(member_no):
-    """Get similar users based on borrowing patterns"""
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        # Get books borrowed by the target user
-        query = """
-        SELECT DISTINCT c.Subject
-        FROM members m
-        JOIN collectionloans cl ON m.ID = cl.Member_id
-        JOIN collectionloanitems cli ON cl.ID = cli.CollectionLoan_id
-        JOIN catalogs c ON cli.Collection_id = c.ID
-        WHERE m.MemberNo = %s
-        """
-        cursor.execute(query, (member_no,))
-        user_subjects = {row['Subject'] for row in cursor.fetchall()}
-        
-        if not user_subjects:
-            return []
-            
-        # Find users who borrowed books with similar subjects
-        query = """
-        SELECT DISTINCT m.ID, m.MemberNo
-        FROM members m
-        JOIN collectionloans cl ON m.ID = cl.Member_id
-        JOIN collectionloanitems cli ON cl.ID = cli.CollectionLoan_id
-        JOIN catalogs c ON cli.Collection_id = c.ID
-        WHERE c.Subject IN %s
-        AND m.MemberNo != %s
-        LIMIT 10
-        """
-        cursor.execute(query, (tuple(user_subjects), member_no))
-        return cursor.fetchall()
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        return []
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
-
-def get_user_interests(member_no):
-    """Get user interests based on profile or initial quiz"""
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        # Get user's education and job information
-        query = """
-        SELECT 
-            m.EducationLevel_id,
-            m.Job_id,
-            m.InstitutionName,
-            m.JenjangPendidikan_id,
-            m.Fakultas_id,
-            m.Jurusan_id
-        FROM members m
-        WHERE m.MemberNo = %s
-        """
-        
-        cursor.execute(query, (member_no,))
-        return cursor.fetchone()
-    
-    except Exception as e:
-        print(f"Error: {e}")
-        return None
-    finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
 
 def get_recommendations(member_no):
-    """Get book recommendations with cold start handling"""
-    user_history = get_user_loan_history(member_no)
-    
-    # If user has no history, use cold start strategy
-    if not user_history:
-        recommendations = []
-        
-        # 1. Get user interests from profile
-        user_interests = get_user_interests(member_no)
-        if user_interests:
-            # Get recommendations based on education/profession
-            if user_interests['Fakultas_id']:
-                faculty_books = get_subject_recommendations(str(user_interests['Fakultas_id']), 2)
-                recommendations.extend(faculty_books)
-            
-            if user_interests['Jurusan_id']:
-                department_books = get_subject_recommendations(str(user_interests['Jurusan_id']), 2)
-                recommendations.extend(department_books)
-        
-        # 2. Add some popular books
-        popular_books = get_popular_books(3)
-        recommendations.extend(popular_books)
-        
-        # 3. Add some new books
-        new_books = get_new_books(2)
-        recommendations.extend(new_books)
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_recommendations = []
-        for book in recommendations:
-            if book['Title'] not in seen:
-                seen.add(book['Title'])
-                unique_recommendations.append(book)
-        
-        return unique_recommendations[:5]  # Return top 5 recommendations
-    
-    # If user has history, use collaborative filtering
-    similar_users = get_similar_users(member_no)
-    if similar_users:
-        return get_collaborative_recommendations(member_no, similar_users)
-    
-    # Fallback to popular books if collaborative filtering fails
-    return get_popular_books()
+    connection = get_db_connection()
+    cursor = connection.cursor(dictionary=True)
 
-def get_collaborative_recommendations(member_no, similar_users):
-    """Get recommendations based on collaborative filtering"""
+    # Query untuk mendapatkan data peminjaman, termasuk Author dan Subject
+    loan_query = """
+    SELECT cl.member_id, cl.Collection_id, c.Catalog_id, cat.Title, cat.Author, cat.Subject, cat.CoverURL
+    FROM collectionloanitems cl
+    JOIN collections c ON cl.Collection_id = c.ID
+    JOIN catalogs cat ON c.Catalog_id = cat.ID
+    """
     try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)
-        
-        similar_member_ids = [user['ID'] for user in similar_users]
-        
-        query = """
-        SELECT DISTINCT 
-            c.Title, 
-            c.Author, 
-            c.Subject, 
-            COUNT(*) as borrow_count
-        FROM collectionloans cl
-        JOIN collectionloanitems cli ON cl.ID = cli.CollectionLoan_id
-        JOIN catalogs c ON cli.Collection_id = c.ID
-        WHERE cl.Member_id IN %s
-        AND c.ID NOT IN (
-            SELECT DISTINCT cli2.Collection_id
-            FROM members m
-            JOIN collectionloans cl2 ON m.ID = cl2.Member_id
-            JOIN collectionloanitems cli2 ON cl2.ID = cli2.CollectionLoan_id
-            WHERE m.MemberNo = %s
-        )
-        GROUP BY c.ID
-        ORDER BY borrow_count DESC
-        LIMIT 5
+        cursor.execute(loan_query)
+        result = cursor.fetchall()
+        df_loans = pd.DataFrame(result)
+
+        # Cek apakah MemberNo ada dalam data
+        member_query = """
+        SELECT ID FROM members WHERE MemberNo = %s
         """
+        cursor.execute(member_query, (member_no,))
+        member_id_result = cursor.fetchone()
+
+        if not member_id_result:
+            return [], 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
+
+        member_id = member_id_result['ID']
+
+        # Pivot table untuk collaborative filtering
+        pivot_table = df_loans.pivot_table(index='member_id', columns='Catalog_id', aggfunc='size', fill_value=0)
+
+        # Menghitung cosine similarity
+        cosine_sim = cosine_similarity(pivot_table)
+        similarity_df = pd.DataFrame(cosine_sim, index=pivot_table.index, columns=pivot_table.index)
+
+        # Mendapatkan anggota yang paling mirip
+        similar_members = similarity_df[member_id].sort_values(ascending=False).iloc[1:11].index.tolist()
+
+        # Mendapatkan rekomendasi buku
+        recommended_books = df_loans[df_loans['member_id'].isin(similar_members)]
+        recommended_books = recommended_books.groupby('Catalog_id').size().reset_index(name='count')
+        recommended_books = recommended_books.sort_values(by='count', ascending=False).head(10)
+
+        # Mengambil judul buku beserta Author dan Subject
+        book_ids = recommended_books['Catalog_id'].tolist()
+        book_query = """
+        SELECT ID, Title, Author, Subject, CoverURL FROM catalogs WHERE ID IN (%s)
+        """ % ','.join(['%s'] * len(book_ids))
         
-        cursor.execute(query, (tuple(similar_member_ids), member_no))
-        return cursor.fetchall()
-    
+        cursor.execute(book_query, book_ids)
+        books = cursor.fetchall()
+        
+        recommendations = [dict(book) for book in books]
+
+        # Perhitungan Metrik Evaluasi
+
+        # Ground truth: Buku yang telah dipinjam oleh pengguna (buku relevan)
+        user_books = set(df_loans[df_loans['member_id'] == member_id]['Catalog_id'].tolist())
+
+        # Buku yang direkomendasikan: ID Katalog dari rekomendasi teratas
+        recommended_books_set = set(recommended_books['Catalog_id'].tolist())
+
+        # Precision = jumlah buku relevan yang direkomendasikan / jumlah total buku yang direkomendasikan
+        relevant_recommended_books = recommended_books_set.intersection(user_books)
+        precision = len(relevant_recommended_books) / len(recommended_books_set) if len(recommended_books_set) > 0 else 0.0
+
+        # Recall = jumlah buku relevan yang direkomendasikan / jumlah total buku relevan
+        recall = len(relevant_recommended_books) / len(user_books) if len(user_books) > 0 else 0.0
+
+        # Perhitungan NDCG (menggunakan peringkat dari buku yang direkomendasikan)
+        # Membuat skor relevansi (1 jika relevan, 0 jika tidak) untuk buku yang direkomendasikan
+        relevance_scores = [1 if book_id in user_books else 0 for book_id in recommended_books['Catalog_id']]
+        
+        # Menghitung DCG (Discounted Cumulative Gain)
+        dcg = np.sum([relevance_scores[i] / np.log2(i + 2) for i in range(len(relevance_scores))])
+        
+        # Menghitung Ideal DCG (IDCG) berdasarkan skor relevansi yang diurutkan
+        ideal_relevance_scores = sorted(relevance_scores, reverse=True)
+        idcg = np.sum([ideal_relevance_scores[i] / np.log2(i + 2) for i in range(len(ideal_relevance_scores))])
+        
+        # NDCG = DCG / IDCG
+        ndcg = dcg / idcg if idcg > 0 else 0.0
+
+        return recommendations, precision, recall, ndcg
+
     except Exception as e:
-        print(f"Error: {e}")
-        return []
+        return [], 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
     finally:
-        if 'conn' in locals() and conn.is_connected():
-            cursor.close()
-            conn.close()
+        cursor.close()
+        connection.close()
+
+
+
+# ------end kodingan rekomendasi--------        
+
+
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
     recommendations = []
     member_no = ''
-    user_history = []
     is_new_user = False
+    precision = recall = ndcg = None
     
     if request.method == 'POST':
         member_no = request.form.get('member_no')
         if member_no:
+            # Get the user's loan history
             user_history = get_user_loan_history(member_no)
-            recommendations = get_recommendations(member_no)
-            is_new_user = not bool(user_history)
+            recommendations, precision, recall, ndcg = get_recommendations(member_no)
+            is_new_user = user_history.empty  # Use .empty to check if the DataFrame is empty
     
     return render_template('index.html', 
-                         recommendations=recommendations,
-                         member_no=member_no,
-                         user_history=user_history,
-                         is_new_user=is_new_user)
+                           recommendations=recommendations,
+                           member_no=member_no,
+                           is_new_user=is_new_user,
+                           precision=precision,
+                           recall=recall,
+                           ndcg=ndcg)
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)
