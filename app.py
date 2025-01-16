@@ -507,7 +507,7 @@ def get_recommendations(member_no):
         member_id_result = cursor.fetchone()
 
         if not member_id_result:
-            return [], 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
+            return [], 0.0, 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
 
         member_id = member_id_result['ID']
 
@@ -552,6 +552,9 @@ def get_recommendations(member_no):
         # Recall = jumlah buku relevan yang direkomendasikan / jumlah total buku relevan
         recall = len(relevant_recommended_books) / len(user_books) if len(user_books) > 0 else 0.0
 
+        # Akurasi = jumlah buku relevan yang direkomendasikan / jumlah buku relevan dalam sistem
+        accuracy = len(relevant_recommended_books) / len(user_books) if len(user_books) > 0 else 0.0
+
         # Perhitungan NDCG (menggunakan peringkat dari buku yang direkomendasikan)
         # Membuat skor relevansi (1 jika relevan, 0 jika tidak) untuk buku yang direkomendasikan
         relevance_scores = [1 if book_id in user_books else 0 for book_id in recommended_books['Catalog_id']]
@@ -566,13 +569,14 @@ def get_recommendations(member_no):
         # NDCG = DCG / IDCG
         ndcg = dcg / idcg if idcg > 0 else 0.0
 
-        return recommendations, precision, recall, ndcg
+        return recommendations, precision, recall, ndcg, accuracy
 
     except Exception as e:
-        return [], 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
+        return [], 0.0, 0.0, 0.0, 0.0  # Kembalikan rekomendasi kosong dan nilai metrik nol
     finally:
         cursor.close()
         connection.close()
+
 
 
 
@@ -585,15 +589,16 @@ def index():
     recommendations = []
     member_no = ''
     is_new_user = False
-    precision = recall = ndcg = None
+    precision = recall = ndcg = accuracy = None  # Tambahkan variabel accuracy
     
     if request.method == 'POST':
         member_no = request.form.get('member_no')
         if member_no:
-            # Get the user's loan history
+            # Dapatkan riwayat peminjaman pengguna
             user_history = get_user_loan_history(member_no)
-            recommendations, precision, recall, ndcg = get_recommendations(member_no)
-            is_new_user = user_history.empty  # Use .empty to check if the DataFrame is empty
+            # Mendapatkan rekomendasi dan metrik
+            recommendations, precision, recall, ndcg, accuracy = get_recommendations(member_no)  # Ambil akurasi juga
+            is_new_user = user_history.empty  # Gunakan .empty untuk memeriksa apakah DataFrame kosong
     
     return render_template('index.html', 
                            recommendations=recommendations,
@@ -601,7 +606,9 @@ def index():
                            is_new_user=is_new_user,
                            precision=precision,
                            recall=recall,
-                           ndcg=ndcg)
+                           ndcg=ndcg,
+                           accuracy=accuracy)  # Kirimkan akurasi ke template
+
 
 
 
