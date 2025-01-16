@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Library</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+         :root {
+            --hero-gradient: linear-gradient(135deg, #4b48cf 0%, #2a3179 100%);
+        }
+        
+        .navbar {
+            background: #2a3179 !important; /* Changed from transparent to blue */
+            position: relative; /* Changed from absolute to relative */
+            width: 100%;
+            z-index: 1000;
+            padding: 1rem 0;
+        }
+        
+        .navbar-brand {
+            color: white !important;
+            font-size: 1.5rem;
+        }
+        
+        .navbar-nav .nav-link {
+            color: rgba(255,255,255,0.9) !important;
+            padding: 0.5rem 1rem;
+        }
+
+        .navbar-toggler {
+            border-color: rgba(255,255,255,0.5) !important;
+        }
+
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.5%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+        }
+
+        .hero-section {
+            background: var(--hero-gradient);
+            min-height: 400px;
+            padding: 80px 0 100px; /* Adjusted top padding */
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-section::after {
+            content: "";
+            position: absolute;
+            bottom: -50px;
+            left: 0;
+            right: 0;
+            height: 100px;
+            background: white;
+            transform: skewY(-3deg);
+        }
+
+        .hero-title {
+            color: white;
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .hero-subtitle {
+            color: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .search-container {
+            max-width: 700px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .search-box {
+            background: white;
+            border-radius: 50px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .search-input {
+            border: none;
+            flex-grow: 1;
+            padding: 10px 20px;
+            outline: none;
+            font-size: 1rem;
+        }
+
+        .search-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .search-button:hover {
+            background: #45a049;
+        }
+
+        .content-section {
+            padding: 50px 0;
+            background: #fff;
+        }
+
+        .section-title {
+            font-size: 2rem;
+            color: #2a3179;
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        .section-subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .search-results {
+            margin-top: 2rem;
+        }
+
+        .book-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="bi bi-book"></i>
+                Smart Opac
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Beranda</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">Tautan</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#memberModal">
+                            <i class="bi bi-person"></i> Keanggotaan Online
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+     <!-- Member Modal -->
+     <div class="modal fade" id="memberModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Keanggotaan Online</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form method="POST">
+                        <div class="mb-3">
+                            <label for="member_no" class="form-label">Nomor Anggota</label>
+                            <input type="text" class="form-control" id="member_no" name="member_no" 
+                                   value="{{ member_no }}" placeholder="Masukkan nomor anggota">
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+                            <button type="submit" class="btn btn-primary">Lihat Rekomendasi</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+  
+    <div class="container mt-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Beranda</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Detail Buku</li>
+            </ol>
+        </nav>
+    
+        <div class="row">
+            <!-- Cover Buku -->
+            <div class="col-md-4">
+                <div class="card">
+                    {% if book.CoverURL %}
+                    <img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/{{book.CoverURL}}" 
+                         class="card-img-top" 
+                         alt="{{ book.Title }}"
+                         onerror="this.src='https://via.placeholder.com/300x400?text=No+Cover'">
+                    {% else %}
+                    <img src="https://via.placeholder.com/300x400?text=No+Cover" 
+                         class="card-img-top" 
+                         alt="No Cover Available">
+                    {% endif %}
+                </div>
+            </div>
+    
+            <!-- Informasi Buku -->
+            <div class="col-md-8">
+                <h1 class="mb-4">{{ book.Title }}</h1>
+                
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>Penulis</strong></div>
+                            <div class="col-md-8">{{ book.Author or 'Tidak tersedia' }}</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>Penerbit</strong></div>
+                            <div class="col-md-8">{{ book.Publisher or 'Tidak tersedia' }}</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>Tahun Terbit</strong></div>
+                            <div class="col-md-8">{{ book.PublishYear or 'Tidak tersedia' }}</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>Edisi</strong></div>
+                            <div class="col-md-8">{{ book.Edition or 'Tidak tersedia' }}</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>ISBN</strong></div>
+                            <div class="col-md-8">{{ book.ISBN or 'Tidak tersedia' }}</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>Nomor Panggil</strong></div>
+                            <div class="col-md-8">{{ book.CallNumber or 'Tidak tersedia' }}</div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4"><strong>Subjek</strong></div>
+                            <div class="col-md-8">{{ book.Subject or 'Tidak tersedia' }}</div>
+                        </div>
+                    </div>
+                </div>
+    
+                <!-- Ketersediaan -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Status Ketersediaan</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row align-items-center">
+                            <div class="col">
+                                <h4 class="mb-0">
+                                    <span class="badge {% if book.available > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ book.available }} dari {{ book.total_copies }} tersedia
+                                    </span>
+                                </h4>
+                            </div>
+                            <div class="col text-end">
+                                <small class="text-muted">
+                                    Dipinjam {{ book.borrow_count or 0 }} kali
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+    
+               
+            </div>
+        </div>
+    </div>
+
+    <!-- Tambahkan di book_detail.html setelah bagian detail buku -->
+
+<!-- Container untuk hasil klasifikasi -->
+<div class="row mt-4">
+    <!-- Loading Indicator -->
+    <div id="classificationLoadingIndicator" class="text-center" style="display: none;">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-2">Memproses klasifikasi...</p>
+    </div>
+
+    <!-- Results Container -->
+    <div id="classificationResults" style="display: none;">
+        <div class="row">
+            <!-- Kategori yang Disarankan -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="card-title mb-0">Kategori yang Disarankan</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="suggestedCategories"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buku yang Mirip -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="card-title mb-0">Buku yang Mirip</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="similarBooks"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Ambil data buku dari halaman yang sudah ditampilkan
+const bookData = {
+    title: "{{ book.Title }}",
+    author: "{{ book.Author or '' }}",
+    subject: "{{ book.Subject or '' }}"
+};
+
+// Fungsi untuk melakukan klasifikasi
+async function performClassification() {
+    const loadingIndicator = document.getElementById('classificationLoadingIndicator');
+    const resultsDiv = document.getElementById('classificationResults');
+    const suggestedCategoriesDiv = document.getElementById('suggestedCategories');
+    const similarBooksDiv = document.getElementById('similarBooks');
+    
+    try {
+        loadingIndicator.style.display = 'block';
+        resultsDiv.style.display = 'none';
+        
+        const response = await fetch('/api/classify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(bookData)
+        });
+        
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Klasifikasi gagal');
+        }
+        
+        // Clear previous results
+        suggestedCategoriesDiv.innerHTML = '';
+        similarBooksDiv.innerHTML = '';
+        
+        // Render suggested categories
+        if (data.data?.suggested_categories?.length > 0) {
+            const categoriesHTML = data.data.suggested_categories.map(category => {
+                const similarity = parseInt(category.similarity) || 0;
+                return `
+                    <div class="mb-3">
+                        <h6 class="mb-2">${category.category || 'Unnamed Category'}</h6>
+                        <div class="progress">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: ${similarity * 20}%" 
+                                 aria-valuenow="${similarity * 20}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                Score: ${similarity}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            suggestedCategoriesDiv.innerHTML = categoriesHTML;
+        } else {
+            suggestedCategoriesDiv.innerHTML = '<p class="text-muted">Tidak ada kategori yang ditemukan</p>';
+        }
+        
+        // Render similar books
+        if (data.data?.similar_books?.length > 0) {
+            const booksHTML = data.data.similar_books.map(book => {
+                const borrowCount = book.borrow_count || 0;
+                return `
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <h6 class="card-title">${book.Title || 'Untitled'}</h6>
+                            <p class="card-text">
+                                <small class="text-muted">
+                                    <i class="bi bi-person"></i> ${book.Author || 'Tidak ada penulis'}<br>
+                                    <i class="bi bi-tag"></i> ${book.Subject || 'Tidak ada subjek'}<br>
+                                    <i class="bi bi-book"></i> Dipinjam: ${borrowCount} kali
+                                </small>
+                            </p>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            similarBooksDiv.innerHTML = booksHTML;
+        } else {
+            similarBooksDiv.innerHTML = '<p class="text-muted">Tidak ada buku yang mirip</p>';
+        }
+        
+        // Show results and scroll
+        resultsDiv.style.display = 'block';
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+    } catch (error) {
+        console.error('Classification error:', error);
+        resultsDiv.innerHTML = `
+            <div class="alert alert-danger" role="alert">
+                Error: ${error.message}
+            </div>
+        `;
+        resultsDiv.style.display = 'block';
+    } finally {
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+// Jalankan klasifikasi saat halaman dimuat
+document.addEventListener('DOMContentLoaded', performClassification);
+</script>
+ 
+
+    
+
+
