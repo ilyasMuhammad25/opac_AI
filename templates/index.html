@@ -234,10 +234,17 @@
                         <div class="col-md-4 mb-4">
                             <div class="book-card">
                                 
+                                {% if book.CoverURL %}
+                                <img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/{{ book.CoverURL }}" 
+                                     alt="{{ book.Title }}" 
+                                     class="img-fluid mb-3 rounded">
+                            {% else %}
+                                <img src="{{ url_for('static', filename='images/blog.jpg') }}" 
+                                     alt="No Cover Available" 
+                                     class="img-fluid mb-3 rounded">
+                            {% endif %}
+                            
                               
-                                <img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/{{book.CoverURL}}" 
-                                alt="{{book.Title}}" 
-                                class="img-fluid mb-3 rounded">
                                
                                <a href="/books/{{book.ID}}" ><h3 class="h5 mb-2">{{ book.Title }}</h3></a>
                                 <p class="mb-1"><i class="bi bi-person"></i> {{ book.Author }}</p>
@@ -314,22 +321,35 @@
                         const bookCard = document.createElement('div');
                         bookCard.className = 'col-md-4 mb-4';
                         bookCard.innerHTML = `
-                            <div class="book-card">
-                                ${book.CoverURL 
-                                    ? `<img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/${book.CoverURL}" alt="${book.Title}" class="img-fluid mb-3 rounded" 
-                                           onerror="this.onerror=null; this.src='https://via.placeholder.com/150x200?text=No+Cover';">` 
-                                    : ''}
-                                <a href="/books/${book.ID}"><h3 class="h5 mb-2">${book.Title || 'Untitled'}</h3></a>
-                                <p class="mb-1"><i class="bi bi-person"></i> ${book.Author || 'Unknown Author'}</p>
-                                <p class="mb-1"><i class="bi bi-building"></i> ${book.Publisher || 'Unknown Publisher'}</p>
-                                <p class="mb-1"><i class="bi bi-tag"></i> ${book.Subject || 'N/A'}</p>
-                                ${book.borrow_count 
-                                    ? `<p class="text-success mb-0">
-                                        <i class="bi bi-graph-up"></i> Dipinjam ${book.borrow_count} kali
-                                       </p>` 
-                                    : ''}
-                            </div>
-                        `;
+                        <div class="book-card">
+                            ${book.CoverURL 
+                                ? `<img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/${book.CoverURL}" 
+                                        alt="${book.Title || 'No Title'}" 
+                                        class="img-fluid mb-3 rounded" 
+                                        onerror="this.onerror=null; this.src='/static/images/blog.png';">` 
+                                : `<img src="/static/images/blog.png" 
+                                        alt="No Cover Available" 
+                                        class="img-fluid mb-3 rounded">`}
+                            <a href="/books/${book.ID}">
+                                <h3 class="h5 mb-2">${book.Title || 'Untitled'}</h3>
+                            </a>
+                            <p class="mb-1">
+                                <i class="bi bi-person"></i> ${book.Author || 'Unknown Author'}
+                            </p>
+                            <p class="mb-1">
+                                <i class="bi bi-building"></i> ${book.Publisher || 'Unknown Publisher'}
+                            </p>
+                            <p class="mb-1">
+                                <i class="bi bi-tag"></i> ${book.Subject || 'N/A'}
+                            </p>
+                            ${book.borrow_count 
+                                ? `<p class="text-success mb-0">
+                                    <i class="bi bi-graph-up"></i> Dipinjam ${book.borrow_count} kali
+                                </p>` 
+                                : ''}
+                        </div>
+                    `;
+
                         searchResultsContainer.appendChild(bookCard);
                     });
                 }
