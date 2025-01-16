@@ -217,6 +217,7 @@ def get_suggested_categories(title, author, subject):
         FROM 
             catalogs
         WHERE 
+            
             Title LIKE %s OR
             Author LIKE %s OR
             Subject LIKE %s
@@ -323,6 +324,7 @@ class GeminiSQLConverter:
         Query: "Show popular books"
         SQL: 
         SELECT 
+            CAST(c.ID AS SIGNED) as ID,
             c.Title,
             c.Author,
             c.Publisher,
@@ -390,6 +392,7 @@ class GeminiSQLConverter:
         required_elements = [
             'SELECT',
             'FROM',
+            "ID",
             'Title',
             'Author',
             'Publisher'

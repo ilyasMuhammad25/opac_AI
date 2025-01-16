@@ -319,7 +319,7 @@
                                     ? `<img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/${book.CoverURL}" alt="${book.Title}" class="img-fluid mb-3 rounded" 
                                            onerror="this.onerror=null; this.src='https://via.placeholder.com/150x200?text=No+Cover';">` 
                                     : ''}
-                                <h3 class="h5 mb-2">${book.Title || 'Untitled'}</h3>
+                                <a href="/books/${book.ID}"><h3 class="h5 mb-2">${book.Title || 'Untitled'}</h3></a>
                                 <p class="mb-1"><i class="bi bi-person"></i> ${book.Author || 'Unknown Author'}</p>
                                 <p class="mb-1"><i class="bi bi-building"></i> ${book.Publisher || 'Unknown Publisher'}</p>
                                 <p class="mb-1"><i class="bi bi-tag"></i> ${book.Subject || 'N/A'}</p>

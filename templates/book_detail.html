@@ -401,7 +401,7 @@ async function performClassification() {
                 return `
                     <div class="card mb-3">
                         <div class="card-body">
-                            <h6 class="card-title">${book.Title || 'Untitled'}</h6>
+                           <a href="/books/${book.ID}"> <h6 class="card-title">${book.Title || 'Untitled'}</h6></a>
                             <p class="card-text">
                                 <small class="text-muted">
                                     <i class="bi bi-person"></i> ${book.Author || 'Tidak ada penulis'}<br>
