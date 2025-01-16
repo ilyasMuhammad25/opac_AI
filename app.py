@@ -563,8 +563,9 @@ def get_recommendations(member_no):
         # Ground truth: Buku yang telah dipinjam oleh pengguna (buku relevan)
         user_books = set(user_loans['Catalog_id'].tolist())
 
-        # Buku yang direkomendasikan: ID Katalog dari rekomendasi teratas
-        recommended_books_set = set(recommended_books['Catalog_id'].tolist())
+       # Hanya ambil 10 rekomendasi teratas
+        recommended_books_top_k = recommended_books.head(10)
+        recommended_books_set = set(recommended_books_top_k['Catalog_id'].tolist())
 
         # Precision = jumlah buku relevan yang direkomendasikan / jumlah total buku yang direkomendasikan
         relevant_recommended_books = recommended_books_set.intersection(user_books)
@@ -577,11 +578,12 @@ def get_recommendations(member_no):
         accuracy = len(relevant_recommended_books) / len(user_books) if len(user_books) > 0 else 0.0
 
         # Perhitungan NDCG
-        relevance_scores = [1 if book_id in user_books else 0 for book_id in recommended_books['Catalog_id']]
+        relevance_scores = [1 if book_id in user_books else 0 for book_id in recommended_books_top_k['Catalog_id']]
         dcg = np.sum([relevance_scores[i] / np.log2(i + 2) for i in range(len(relevance_scores))])
         ideal_relevance_scores = sorted(relevance_scores, reverse=True)
         idcg = np.sum([ideal_relevance_scores[i] / np.log2(i + 2) for i in range(len(ideal_relevance_scores))])
         ndcg = dcg / idcg if idcg > 0 else 0.0
+
 
         return recommendations, precision, recall, ndcg, accuracy
 
