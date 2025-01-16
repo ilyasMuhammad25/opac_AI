@@ -233,12 +233,12 @@
                         {% for book in recommendations %}
                         <div class="col-md-4 mb-4">
                             <div class="book-card">
-                                <p>{{ book.CoverURL }}</p> 
+                                
                               
                                 <img src="https://perpustakaan.pangkalpinangkota.go.id/uploaded_files/sampul_koleksi/original/Monograf/{{book.CoverURL}}" 
                                 alt="{{book.Title}}" 
                                 class="img-fluid mb-3 rounded">
-                               <p>halo {{book.ID}}</p>
+                               
                                <a href="/books/{{book.ID}}" ><h3 class="h5 mb-2">{{ book.Title }}</h3></a>
                                 <p class="mb-1"><i class="bi bi-person"></i> {{ book.Author }}</p>
                                 <p class="mb-1"><i class="bi bi-tag"></i> {{ book.Subject }}</p>
