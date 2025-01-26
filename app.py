@@ -22,7 +22,7 @@ db_config = {
     'host': 'localhost',
     'user': 'root',
     'password': '',
-    'database': 'inlislite_pangkalpinang'
+    'database': 'inlislite_pangkalpinang21122024'
 }
 
 # Initialize the connection pool

@@ -219,6 +219,18 @@
             <!-- Search Results -->
             <div id="searchResults" style="display: none;">
                 <h2 class="section-title">Hasil Pencarian</h2>
+                <!-- Debug Information -->
+                <div id="debugInfo" class="mb-4" style="display: none;">
+                    <div class="card">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Debug Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <h6>Generated SQL Query:</h6>
+                            <pre id="sqlQuery" class="bg-light p-3 rounded" style="overflow-x: auto;"></pre>
+                        </div>
+                    </div>
+                </div>
                 <div id="searchResultsContainer" class="row">
                     <!-- Results will be populated here -->
                 </div>
@@ -276,15 +288,13 @@
         </div>
     </section>
 
-   
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         async function performSearch() {
             const searchInput = document.getElementById('nlSearch');
-    const loadingIndicator = document.getElementById('searchLoadingIndicator'); // ID baru
-    const searchResults = document.getElementById('searchResults');
-    const searchResultsContainer = document.getElementById('searchResultsContainer');
+            const loadingIndicator = document.getElementById('searchLoadingIndicator'); // ID baru
+            const searchResults = document.getElementById('searchResults');
+            const searchResultsContainer = document.getElementById('searchResultsContainer');
 
             if (!searchInput || !searchInput.value.trim()) {
                 alert('Silakan masukkan kata kunci pencarian');
@@ -306,7 +316,17 @@
                 const data = await response.json();
 
                 if (!data.success) {
-                    throw new Error(data.error || 'Pencarian gagal');
+    throw new Error(data.error || 'Pencarian gagal');
+}
+
+                // Display debug information
+                const debugInfo = document.getElementById('debugInfo');
+                const sqlQuery = document.getElementById('sqlQuery');
+                if (data.sql_query) {
+                    sqlQuery.textContent = data.sql_query;
+                    debugInfo.style.display = 'block';
+                } else {
+                    debugInfo.style.display = 'none';
                 }
 
                 searchResultsContainer.innerHTML = '';
