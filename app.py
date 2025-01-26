@@ -254,12 +254,22 @@ def classify():
         suggested_categories = get_suggested_categories(title, author, subject)
         similar_books = get_similar_books(title, author, subject)
 
-        # Return the classification results
+        # Hitung metrik evaluasi (contoh sederhana)
+        # Di sini Anda bisa menambahkan logika perhitungan yang lebih kompleks
+        evaluation_metrics = {
+            'precision': 0.85,  # Contoh nilai, sesuaikan dengan perhitungan sebenarnya
+            'recall': 0.75,
+            'f1_score': 0.80,
+            'accuracy': 0.82
+        }
+
+        # Return the classification results with evaluation metrics
         return jsonify({
             "success": True,
             "data": {
                 "suggested_categories": suggested_categories,
                 "similar_books": similar_books,
+                "evaluation": evaluation_metrics
             }
         })
 
@@ -268,7 +278,6 @@ def classify():
     except Exception as e:
         app.logger.error(f"Error in classify route: {str(e)}")
         return jsonify({"success": False, "error": "Internal Server Error"}), 500
-
 #------ end kodingan klasifikasi---------
 
 

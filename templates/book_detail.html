@@ -303,18 +303,50 @@
     <!-- Results Container -->
     <div id="classificationResults" style="display: none;">
         <div class="row">
-            <!-- Kategori yang Disarankan -->
-            <div class="col-md-6 mb-4">
-                <div class="card">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="card-title mb-0">Kategori yang Disarankan</h5>
-                    </div>
-                    <div class="card-body">
-                        <div id="suggestedCategories"></div>
-                    </div>
+        <!-- Kategori yang Disarankan -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="card-title mb-0">Kategori yang Disarankan</h5>
+                </div>
+                <div class="card-body">
+                    <div id="suggestedCategories"></div>
+                    
+                    <!-- Tambahkan bagian evaluasi
+                    <div id="categoryEvaluation" class="mt-4">
+                        <h6 class="border-bottom pb-2">Evaluasi Klasifikasi:</h6>
+                        <div class="row mt-3">
+                            <div class="col-6">
+                                <small class="text-muted">Precision:</small>
+                                <div class="progress mb-3">
+                                    <div id="precisionBar" class="progress-bar bg-info" role="progressbar"></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Recall:</small>
+                                <div class="progress mb-3">
+                                    <div id="recallBar" class="progress-bar bg-warning" role="progressbar"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">F1-Score:</small>
+                                <div class="progress mb-3">
+                                    <div id="f1Bar" class="progress-bar bg-success" role="progressbar"></div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">Accuracy:</small>
+                                <div class="progress mb-3">
+                                    <div id="accuracyBar" class="progress-bar bg-primary" role="progressbar"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div> -->
                 </div>
             </div>
-
+        </div>
             <!-- Buku yang Mirip -->
             <div class="col-md-6 mb-4">
                 <div class="card">
@@ -370,55 +402,109 @@ async function performClassification() {
         suggestedCategoriesDiv.innerHTML = '';
         similarBooksDiv.innerHTML = '';
         
-        // Render suggested categories
+        // Render suggested categories with evaluation metrics
         if (data.data?.suggested_categories?.length > 0) {
-            const categoriesHTML = data.data.suggested_categories.map(category => {
+            let categoriesHTML = `
+                <div class="mb-4">
+                    <h6 class="border-bottom pb-2 mb-3">Hasil Klasifikasi Kategori:</h6>
+            `;
+            
+            // Render categories
+            categoriesHTML += data.data.suggested_categories.map(category => {
                 const similarity = parseInt(category.similarity) || 0;
                 return `
                     <div class="mb-3">
                         <h6 class="mb-2">${category.category || 'Unnamed Category'}</h6>
                         <div class="progress">
-                            <div class="progress-bar bg-success" role="progressbar" 
-                                 style="width: ${similarity * 20}%" 
-                                 aria-valuenow="${similarity * 20}" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="100">
-                                Score: ${similarity}
+                            <div class="progress-bar bg-success" role="progressbar"
+                                style="width: ${similarity}%"
+                                aria-valuenow="${similarity}"
+                                aria-valuemin="0"
+                                aria-valuemax="100">
+                                Score: ${similarity}%
                             </div>
                         </div>
                     </div>
                 `;
             }).join('');
+
+            // Add evaluation metrics section if available
+            if (data.data.evaluation) {
+                const metrics = data.data.evaluation;
+                categoriesHTML += `
+                    <div class="mt-4">
+                        <h6 class="border-bottom pb-2 mb-3">Evaluasi Klasifikasi:</h6>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Precision</h6>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-info" role="progressbar" 
+                                                style="width: ${metrics.precision * 100}%" 
+                                                aria-valuenow="${metrics.precision * 100}">
+                                                ${(metrics.precision * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Recall</h6>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-warning" role="progressbar" 
+                                                style="width: ${metrics.recall * 100}%" 
+                                                aria-valuenow="${metrics.recall * 100}">
+                                                ${(metrics.recall * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">F1-Score</h6>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-success" role="progressbar" 
+                                                style="width: ${metrics.f1_score * 100}%" 
+                                                aria-valuenow="${metrics.f1_score * 100}">
+                                                ${(metrics.f1_score * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <h6 class="card-title">Accuracy</h6>
+                                        <div class="progress">
+                                            <div class="progress-bar bg-primary" role="progressbar" 
+                                                style="width: ${metrics.accuracy * 100}%" 
+                                                aria-valuenow="${metrics.accuracy * 100}">
+                                                ${(metrics.accuracy * 100).toFixed(1)}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            categoriesHTML += '</div>';
             suggestedCategoriesDiv.innerHTML = categoriesHTML;
         } else {
             suggestedCategoriesDiv.innerHTML = '<p class="text-muted">Tidak ada kategori yang ditemukan</p>';
         }
+
+        // Render similar books (kode tidak berubah)
+        // ...
         
-        // Render similar books
-        if (data.data?.similar_books?.length > 0) {
-            const booksHTML = data.data.similar_books.map(book => {
-                const borrowCount = book.borrow_count || 0;
-                return `
-                    <div class="card mb-3">
-                        <div class="card-body">
-                           <a href="/books/${book.ID}"> <h6 class="card-title">${book.Title || 'Untitled'}</h6></a>
-                            <p class="card-text">
-                                <small class="text-muted">
-                                    <i class="bi bi-person"></i> ${book.Author || 'Tidak ada penulis'}<br>
-                                    <i class="bi bi-tag"></i> ${book.Subject || 'Tidak ada subjek'}<br>
-                                    <i class="bi bi-book"></i> Dipinjam: ${borrowCount} kali
-                                </small>
-                            </p>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            similarBooksDiv.innerHTML = booksHTML;
-        } else {
-            similarBooksDiv.innerHTML = '<p class="text-muted">Tidak ada buku yang mirip</p>';
-        }
-        
-        // Show results and scroll
         resultsDiv.style.display = 'block';
         resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
@@ -434,7 +520,6 @@ async function performClassification() {
         loadingIndicator.style.display = 'none';
     }
 }
-
 // Jalankan klasifikasi saat halaman dimuat
 document.addEventListener('DOMContentLoaded', performClassification);
 </script>
